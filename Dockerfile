@@ -1,19 +1,16 @@
-FROM golang:1.15.3-alpine as ssm-builder
+FROM ubuntu:latest
 
-ARG VERSION=1.2.279.0
+RUN set -e;  \
+    apt-get update && apt-get install -y curl apt-transport-https ca-certificates gnupg; \
+    echo "deb [arch=amd64] https://apt.releases.hashicorp.com $(. /etc/lsb-release; echo "$DISTRIB_CODENAME") main" > /etc/apt/sources.list.d/hashicorp.list; \
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -; \
+    apt-get update -o Dir::Etc::sourcelist=sources.list.d/hashicorp.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0; \
+    apt-get install -y packer; \
+    curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o /tmp/session-manager-plugin.deb; \
+    dpkg -i /tmp/session-manager-plugin.deb; \
+    apt-get autoremove -y curl apt-transport-https ca-certificates gnupg; \
+    apt-get clean
 
-RUN set -ex && apk add --no-cache make git gcc libc-dev curl bash zip && \
-    curl -sLO https://github.com/aws/session-manager-plugin/archive/${VERSION}.tar.gz && \
-    mkdir -p /go/src/github.com && \
-    tar xzf ${VERSION}.tar.gz && \
-    mv session-manager-plugin-${VERSION} /go/src/github.com/session-manager-plugin && \
-    cd /go/src/github.com/session-manager-plugin && \
-    make release
-
-# see https://hub.docker.com/r/hashicorp/packer/tags for all available tags
-FROM hashicorp/packer:light@sha256:1e298ef74fc816654238f7c17ea0f0636c2e19d3baf77ed5f795b7f976a4ba96
-
-COPY --from=ssm-builder /go/src/github.com/session-manager-plugin/bin/linux_amd64_plugin/session-manager-plugin /usr/local/bin/
 COPY "entrypoint.sh" "/entrypoint.sh"
 
 ENTRYPOINT ["/entrypoint.sh"]
